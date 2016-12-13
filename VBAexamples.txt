@@ -1,0 +1,209 @@
+Function TextToDate(textdate)
+TextToDate = CDate(textdate)
+
+End Function
+
+
+
+
+Function TLrate(OriginZip As String, DestZip As String, Miles As Double, Optional FSC As Variant)
+'Instructions:  Select Origin Zip Code, Destination Zipcode, Miles, and you may optionally enter cents per mile for fuel surcharge if this is left blank it will be zero
+
+Dim OriginZone As String
+Dim DestZone As String
+Dim RPM As Currency
+Dim ETSmin As Currency
+Dim Gradmin As Currency
+Dim RatedMiles As Currency
+Dim ETSFinalRate As Currency
+
+If IsMissing(FSC) Then FSC = 0
+
+
+OriginZone = Application.VLookup(Left(OriginZip, 3), ThisWorkbook.Worksheets("AutoTLratesSheet").Range("K4:L903"), 2, False)
+DestZone = Application.VLookup(Left(DestZip, 3), ThisWorkbook.Worksheets("AutoTLratesSheet").Range("K4:L903"), 2, False)
+RPM = Application.VLookup(OriginZone & DestZone, ThisWorkbook.Worksheets("AutoTLratesSheet").Range("A4:E5332"), 5, False)
+RatedMiles = RPM * Miles
+
+
+ETSmin = Application.VLookup(OriginZone & DestZone, ThisWorkbook.Worksheets("AutoTLratesSheet").Range("A4:F5332"), 6, False)
+
+Gradmin = Application.VLookup(Miles, ThisWorkbook.Worksheets("AutoTLratesSheet").Range("Q5:S9"), 3, True)
+
+ETSFinalRate = Application.Max(RatedMiles, ETSmin)
+
+TLrate = Application.Max(ETSFinalRate, Gradmin) + (Miles * FSC)
+
+
+
+End Function
+
+
+
+Sub InstantCOD()
+
+
+Dim LatLongRange As Range
+Dim WeightRange As Range
+Dim AnswerRange As Range
+Dim i As Long
+Dim WeightTotal As Double
+Dim DecLatLbs As Double
+Dim DecLongLbs As Double
+Dim AnswerCheckRange As Range
+
+
+
+WeightTotal = 0
+DecLatLbs = 0
+DecLongLbs = 0
+
+
+' choose latlongs to use
+Set LatLongRange = Application.InputBox(Prompt:= _
+    "Please select a range with your Mouse of PC*Miler Lat/Longs.", _
+        Title:="Select Lat/Longs", Type:=8)
+        
+  
+' choose weights to use
+Set WeightRange = Application.InputBox(Prompt:= _
+    "Please select a range with your Mouse of corresponding weights.", _
+        Title:="Select Weights", Type:=8)
+            
+'check to make sure that there is a weight for every lat/long
+        If LatLongRange.Rows.Count <> WeightRange.Rows.Count Then
+        MsgBox ("Your Lat/Long range is a different size than your Weight range... which is bad")
+        
+        Exit Sub
+        End If
+        
+        
+        If LatLongRange.Rows(1).Row <> WeightRange.Rows(1).Row Then
+        MsgBox ("Your Lat/Long range does not match your Weight range... which is bad")
+        
+        Exit Sub
+        End If
+            
+            
+'select location for answer
+
+Set AnswerRange = Application.InputBox(Prompt:= _
+    "Please select one cell with your Mouse for result of C.O.D. calculation.  The cell you select and the two cells to its right must be blank", _
+        Title:="Result Cell", Type:=8)
+           
+Set AnswerCheckRange = Cells(AnswerRange.Row, AnswerRange.Column).Resize(1, 3)
+
+For Each cell In AnswerCheckRange
+If Not (IsEmpty(cell)) Then
+            MsgBox ("The result of this function requires that the cell you select, and the two cells to its right be blank")
+            Exit Sub
+End If
+
+
+Next cell
+
+
+           
+'ensure answer range is only 1 cell
+Set AnswerRange = Cells(AnswerRange.Rows(1).Row, AnswerRange.Columns(1).Column)
+
+
+'loop that calculates the center of demand
+For i = LatLongRange.Rows(1).Row To LatLongRange.Rows.Count + LatLongRange.Rows(1).Row - 1
+    WeightTotal = Cells(i, WeightRange.Column) + WeightTotal
+    DecLatLbs = (DecLat(Cells(i, LatLongRange.Column)) * Cells(i, WeightRange.Column)) + DecLatLbs
+    DecLongLbs = (DecLong(Cells(i, LatLongRange.Column)) * Cells(i, WeightRange.Column)) + DecLongLbs
+Next i
+
+
+'display answer
+AnswerRange.Value = BackToPCMilerLatLong(DecLatLbs / WeightTotal, DecLongLbs / WeightTotal)
+Cells(AnswerRange.Row, AnswerRange.Column + 1) = DecLatLbs / WeightTotal
+Cells(AnswerRange.Row, AnswerRange.Column + 2) = DecLongLbs / WeightTotal
+
+     '=ROUND(C29,3)&"N"&","&ROUND(D29,3)*-1&"W"
+                    
+End Sub
+
+
+
+
+Function MinOfList(SelectedNames As Range, Values As Range, AllNames As Range, Optional NameORVal As Variant)
+'This function returns the minimum values of a row of data if the column header corresponds to a list you provide
+'First select your list of column headers that you want to include: This must be a vertical list, 1 column wide
+'Next select 1 row of values by as many columns as you want
+'Next select the header row that corresponds to the values previously selected.  1 row by multiple columns
+
+Dim MaxNum As Integer
+
+MaxNum = SelectedNames.Count
+
+If IsMissing(NameORVal) Then NameORVal = 0
+
+best = WorksheetFunction.Max(Values)
+Item = "error"
+
+For i = 1 To MaxNum
+    Var = WorksheetFunction.Match(SelectedNames(i, 1), AllNames, False)
+        
+    If Values(1, Var) <= best Then
+    best = Values(1, Var)
+    Item = AllNames(1, Var)
+    End If
+Next i
+
+If NameORVal = 0 Then
+MinOfList = best
+Else: MinOfList = Item
+End If
+
+End Function
+
+
+
+Function ConcatRange(CellsRange As Range, Optional Delimeter As Variant) As String
+
+If IsMissing(Delimeter) Then Delimeter = "|"
+
+For Each wow In CellsRange
+    ConcatRange = ConcatRange & Delimeter & wow.Value
+Next
+
+ConcatRange = Right(ConcatRange, Len(ConcatRange) - 1)
+
+
+End Function
+
+
+
+Function MegaSearch(SearchString, SearchCharRange As Range)
+' This function attempts to find a value from the SearchCharRange range within the Search String
+' If one of the values in the range is exactly matched the function returns the leftmost value
+' from the same row
+
+
+
+Dim NumRows, NumColumns As Long
+
+MegaSearch = "Not Found"
+
+NumRows = SearchCharRange.Rows.Count
+NumColumns = SearchCharRange.Columns.Count
+
+
+For i = 1 To NumRows
+temp = SearchCharRange.Cells(i, 1)
+
+    For i2 = 1 To NumColumns
+        If IsEmpty(SearchCharRange.Cells(i, i2)) Then Exit For
+        
+        If InStr(LCase(SearchString), LCase(SearchCharRange.Cells(i, i2))) > 0 Then
+            MegaSearch = temp
+            Exit Function
+        End If
+   
+    Next i2
+    
+Next i
+
+End Function
